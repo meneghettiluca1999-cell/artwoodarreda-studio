@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, User, MapPin, Building2, Target, Palette, Loader2, CheckCircle2, Key, Copy, RefreshCw } from "lucide-react";
@@ -10,33 +10,65 @@ const venueTypes = ["Bar", "Pasticceria", "Gelateria", "Panetteria", "Ristorante
 
 export default function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const { getProject, updateProject, regeneratePassword } = useProjects();
+  const { getProject, updateProject, regeneratePassword, loading } = useProjects();
   const router = useRouter();
   
   const project = getProject(resolvedParams.id);
   
   const [formData, setFormData] = useState({
-    name: project?.name || "",
-    clientName: project?.clientName || "",
-    venueName: project?.venueName || "",
-    location: project?.location || "",
-    sizeSqM: project?.sizeSqM || 0,
-    seatingCapacity: project?.seatingCapacity || 0,
-    types: project?.type ? project.type.split(", ").filter(t => t !== "Non specificato") : [],
-    status: project?.status || "new" as "new" | "restyling" | "expansion",
-    targetAudience: project?.targetAudience || "",
-    positioning: project?.positioning || "",
-    goals: project?.goals || "",
-    visualDirection: project?.visualDirection || "",
-    materials: project?.materials || "",
-    focusElements: project?.focusElements || "",
-    notes: project?.notes || "",
+    name: "",
+    clientName: "",
+    venueName: "",
+    location: "",
+    sizeSqM: 0,
+    seatingCapacity: 0,
+    types: [] as string[],
+    status: "new" as "new" | "restyling" | "expansion",
+    targetAudience: "",
+    positioning: "",
+    goals: "",
+    visualDirection: "",
+    materials: "",
+    focusElements: "",
+    notes: "",
   });
 
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState(project?.password || "");
+  const [currentPassword, setCurrentPassword] = useState("");
+
+  // Sync state once project is loaded
+  useEffect(() => {
+    if (project) {
+      setFormData({
+        name: project.name || "",
+        clientName: project.clientName || "",
+        venueName: project.venueName || "",
+        location: project.location || "",
+        sizeSqM: project.sizeSqM || 0,
+        seatingCapacity: project.seatingCapacity || 0,
+        types: project.type ? project.type.split(", ").filter(t => t !== "Non specificato") : [],
+        status: project.status || "new",
+        targetAudience: project.targetAudience || "",
+        positioning: project.positioning || "",
+        goals: project.goals || "",
+        visualDirection: project.visualDirection || "",
+        materials: project.materials || "",
+        focusElements: project.focusElements || "",
+        notes: project.notes || "",
+      });
+      setCurrentPassword(project.password || "");
+    }
+  }, [project]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] text-stone-100">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C5A880]" />
+      </div>
+    );
+  }
 
   if (!project) return <div>Progetto non trovato</div>;
 
@@ -54,10 +86,14 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     }));
   };
 
-  const handleRegeneratePassword = () => {
+  const handleRegeneratePassword = async () => {
     if (confirm("Sei sicuro? La vecchia password non funzionerà più per il cliente.")) {
-      const newPwd = regeneratePassword(project.id);
-      setCurrentPassword(newPwd);
+      try {
+        const newPwd = await regeneratePassword(project.id);
+        setCurrentPassword(newPwd);
+      } catch (err) {
+        alert("Errore durante la rigenerazione della password.");
+      }
     }
   };
 
@@ -69,32 +105,33 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    
-    updateProject(project.id, {
-      name: formData.name || project.name,
-      clientName: formData.clientName || project.clientName,
-      venueName: formData.venueName || project.venueName,
-      location: formData.location || project.location,
-      sizeSqM: Number(formData.sizeSqM) || project.sizeSqM,
-      seatingCapacity: Number(formData.seatingCapacity) || project.seatingCapacity,
-      type: formData.types.length > 0 ? formData.types.join(", ") : project.type,
-      status: formData.status,
-      targetAudience: formData.targetAudience || project.targetAudience,
-      positioning: formData.positioning || project.positioning,
-      goals: formData.goals || project.goals,
-      visualDirection: formData.visualDirection || project.visualDirection,
-      materials: formData.materials || project.materials,
-      focusElements: formData.focusElements || project.focusElements,
-      notes: formData.notes,
-    });
-
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await updateProject(project.id, {
+        name: formData.name || project.name,
+        clientName: formData.clientName || project.clientName,
+        venueName: formData.venueName || project.venueName,
+        location: formData.location || project.location,
+        sizeSqM: Number(formData.sizeSqM) || project.sizeSqM,
+        seatingCapacity: Number(formData.seatingCapacity) || project.seatingCapacity,
+        type: formData.types.length > 0 ? formData.types.join(", ") : project.type,
+        status: formData.status,
+        targetAudience: formData.targetAudience || project.targetAudience,
+        positioning: formData.positioning || project.positioning,
+        goals: formData.goals || project.goals,
+        visualDirection: formData.visualDirection || project.visualDirection,
+        materials: formData.materials || project.materials,
+        focusElements: formData.focusElements || project.focusElements,
+        notes: formData.notes,
+      });
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
-    }, 500);
+    } catch (err) {
+      alert("Errore durante il salvataggio.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

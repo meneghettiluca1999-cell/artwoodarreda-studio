@@ -5,54 +5,100 @@ import { mockProjects, Project, generatePassword } from "@/lib/mock-data";
 
 interface ProjectContextType {
   projects: Project[];
-  updateProject: (id: string, data: Partial<Project>) => void;
-  addProject: (projectData: Omit<Project, 'id' | 'presentation' | 'password'>) => string;
-  deleteProject: (id: string) => void;
+  loading: boolean;
+  updateProject: (id: string, data: Partial<Project>) => Promise<void>;
+  addProject: (projectData: Omit<Project, 'id' | 'presentation' | 'password'>) => Promise<string>;
+  deleteProject: (id: string) => Promise<void>;
   getProject: (id: string) => Project | undefined;
-  regeneratePassword: (id: string) => string;
+  regeneratePassword: (id: string) => Promise<string>;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("artwood_projects");
-    if (stored) {
+    async function loadProjects() {
       try {
-        setProjects(JSON.parse(stored));
-      } catch (e) {
+        setLoading(true);
+        // 1. Fetch from SQLite database
+        const res = await fetch("/api/projects");
+        if (!res.ok) throw new Error("Failed to fetch projects");
+        let dbProjects = await res.json();
+
+        // 2. Check for local storage projects to migrate/sync
+        const stored = localStorage.getItem("artwood_projects");
+        if (stored) {
+          try {
+            const localProjects = JSON.parse(stored) as Project[];
+            if (localProjects.length > 0) {
+              const syncRes = await fetch("/api/projects", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(localProjects),
+              });
+              if (syncRes.ok) {
+                // Successfully migrated local storage projects, clear local storage
+                localStorage.removeItem("artwood_projects");
+                // Refetch projects from database to get the updated list
+                const refreshedRes = await fetch("/api/projects");
+                if (refreshedRes.ok) {
+                  dbProjects = await refreshedRes.json();
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Error migrating local projects:", err);
+          }
+        }
+
+        // 3. Seed database with mockProjects if empty
+        if (dbProjects.length === 0) {
+          const syncRes = await fetch("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mockProjects),
+          });
+          if (syncRes.ok) {
+            dbProjects = await syncRes.json();
+          } else {
+            dbProjects = mockProjects;
+          }
+        }
+
+        setProjects(dbProjects);
+      } catch (err) {
+        console.error("Error loading database projects:", err);
         setProjects(mockProjects);
+      } finally {
+        setLoading(false);
       }
-    } else {
-      setProjects(mockProjects);
     }
+
+    loadProjects();
   }, []);
 
-  useEffect(() => {
-    if (projects.length > 0) {
-      localStorage.setItem("artwood_projects", JSON.stringify(projects));
-    }
-  }, [projects]);
+  const updateProject = async (id: string, data: Partial<Project>) => {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
 
-  const updateProject = (id: string, data: Partial<Project>) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === id) {
-        const updated = { ...p, ...data };
-        if (data.presentation) {
-          updated.presentation = { ...p.presentation, ...data.presentation } as any;
-        }
-        return updated as Project;
-      }
-      return p;
-    }));
+    if (!res.ok) {
+      throw new Error("Failed to update project");
+    }
+
+    const updated = await res.json();
+    setProjects(prev => prev.map(p => (p.id === id ? updated : p)));
   };
 
-  const addProject = (projectData: Omit<Project, 'id' | 'presentation' | 'password'>) => {
+  const addProject = async (projectData: Omit<Project, 'id' | 'presentation' | 'password'>) => {
     const newId = `P-${Math.floor(Math.random() * 9000) + 1000}`;
     const newPassword = generatePassword(6);
-    
+
     const newProject: Project = {
       ...projectData,
       id: newId,
@@ -88,30 +134,51 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         }
       }
     };
-    
-    setProjects(prev => [newProject, ...prev]);
+
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newProject),
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to create project");
+    }
+
+    const created = await res.json();
+    setProjects(prev => [created, ...prev]);
     return newId;
   };
 
-  const deleteProject = (id: string) => {
-    setProjects(prev => {
-      const updated = prev.filter(p => p.id !== id);
-      if (updated.length === 0) {
-        localStorage.removeItem("artwood_projects");
-      }
-      return updated;
+  const deleteProject = async (id: string) => {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: "DELETE",
     });
+
+    if (!res.ok) {
+      throw new Error("Failed to delete project");
+    }
+
+    setProjects(prev => prev.filter(p => p.id !== id));
   };
 
-  const regeneratePassword = (id: string) => {
-    const newPassword = generatePassword(6);
+  const regeneratePassword = async (id: string) => {
+    const res = await fetch(`/api/projects/${id}/password`, {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to regenerate password");
+    }
+
+    const { password } = await res.json();
     setProjects(prev => prev.map(p => {
       if (p.id === id) {
-        return { ...p, password: newPassword };
+        return { ...p, password };
       }
       return p;
     }));
-    return newPassword;
+    return password;
   };
 
   const getProject = (id: string) => {
@@ -119,7 +186,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ProjectContext.Provider value={{ projects, updateProject, addProject, deleteProject, getProject, regeneratePassword }}>
+    <ProjectContext.Provider value={{ projects, loading, updateProject, addProject, deleteProject, getProject, regeneratePassword }}>
       {children}
     </ProjectContext.Provider>
   );

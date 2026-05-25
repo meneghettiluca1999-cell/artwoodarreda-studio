@@ -4,21 +4,27 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProjects } from "@/contexts/ProjectContext";
-import { PlusCircle, ArrowRight, Building2, Calendar, MapPin, MoreVertical, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
+import { PlusCircle, ArrowRight, Building2, Calendar, MapPin, MoreVertical, Pencil, Trash2, X, AlertTriangle, Loader2 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { projects, deleteProject } = useProjects();
+  const { projects, deleteProject, loading } = useProjects();
   const router = useRouter();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const handleDelete = (id: string) => {
-    deleteProject(id);
-    setDeleteConfirmId(null);
-    setOpenMenuId(null);
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteProject(id);
+    } catch (e) {
+      alert("Errore durante l'eliminazione del progetto.");
+    } finally {
+      setDeleteConfirmId(null);
+      setOpenMenuId(null);
+    }
   };
 
   const projectToDelete = deleteConfirmId ? projects.find(p => p.id === deleteConfirmId) : null;
+
 
   return (
     <div className="space-y-8">
@@ -38,7 +44,13 @@ export default function DashboardPage() {
 
       <div className="space-y-4">
         <h2 className="text-xl font-medium">Progetti Attivi</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-card border border-border rounded-xl shadow-sm">
+            <Loader2 className="h-8 w-8 animate-spin mb-4 text-accent" />
+            <p>Caricamento dei progetti in corso...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((project) => (
             <div key={project.id} className="group relative rounded-xl border border-border bg-card p-6 shadow-sm hover:shadow-md transition-all hover:border-accent/50">
               {/* Action Menu Button */}
@@ -139,13 +151,14 @@ export default function DashboardPage() {
             </div>
           ))}
           
-          <Link href="/projects/new">
-            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center hover:border-accent hover:bg-accent/5 transition-colors h-full min-h-[220px]">
-              <PlusCircle className="mx-auto h-8 w-8 text-muted-foreground" />
-              <span className="mt-2 block text-sm font-medium text-foreground">Aggiungi nuovo</span>
-            </div>
-          </Link>
-        </div>
+            <Link href="/projects/new">
+              <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center hover:border-accent hover:bg-accent/5 transition-colors h-full min-h-[220px]">
+                <PlusCircle className="mx-auto h-8 w-8 text-muted-foreground" />
+                <span className="mt-2 block text-sm font-medium text-foreground">Aggiungi nuovo</span>
+              </div>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}

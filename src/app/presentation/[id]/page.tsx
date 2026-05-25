@@ -2,17 +2,25 @@
 
 import { useState, use } from "react";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
-import { Lock, ArrowRight, Download, Calendar, CheckCircle2, Mail, X, ZoomIn, Edit } from "lucide-react";
+import { Lock, ArrowRight, Download, Calendar, CheckCircle2, Mail, X, ZoomIn, Edit, Loader2 } from "lucide-react";
 import { useProjects } from "@/contexts/ProjectContext";
 import Image from "next/image";
 
 export default function PresentationPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const { getProject } = useProjects();
+  const { getProject, loading } = useProjects();
   const project = getProject(resolvedParams.id);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] text-stone-100">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C5A880]" />
+      </div>
+    );
+  }
 
   if (!project) return <div>Progetto non trovato</div>;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use, useRef } from "react";
+import { useState, use, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Image as ImageIcon, FileText, CheckCircle2, LayoutTemplate, Lightbulb, Plus, Trash2, GripVertical, Check, Upload, Loader2, Share2 } from "lucide-react";
@@ -52,28 +52,55 @@ const resizeAndCompressImage = (file: File): Promise<string> => {
 
 export default function EditPresentationPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const { getProject, updateProject } = useProjects();
+  const { getProject, updateProject, loading } = useProjects();
   const router = useRouter();
   
   const project = getProject(resolvedParams.id);
   
   const [formData, setFormData] = useState({
-    heroImage: project?.presentation?.heroImage || "/generated/hero_default.webp",
-    conceptText: project?.presentation?.conceptText || "",
-    visionAtmosphere: project?.presentation?.vision.atmosphere || "",
-    visionDirection: project?.presentation?.vision.direction || "",
-    visionGoals: project?.presentation?.vision.goals || [],
-    planimetryImage: project?.presentation?.planimetryImage || "/generated/planimetry_default.webp",
-    moodboardImages: project?.presentation?.moodboardImages || [],
-    inspirations: project?.presentation?.inspirations || [],
-    focusAreas: project?.presentation?.focusAreas || [],
-    totalEstimate: project?.presentation?.proposal.totalEstimate || "",
-    timeline: project?.presentation?.proposal.timeline || "",
+    heroImage: "/generated/hero_default.webp",
+    conceptText: "",
+    visionAtmosphere: "",
+    visionDirection: "",
+    visionGoals: [] as string[],
+    planimetryImage: "/generated/planimetry_default.webp",
+    moodboardImages: [] as { url: string; tag: string }[],
+    inspirations: [] as { url: string; caption: string; relevance: string }[],
+    focusAreas: [] as { title: string; description: string; imageUrl: string }[],
+    totalEstimate: "",
+    timeline: "",
   });
 
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Sync state once project is loaded
+  useEffect(() => {
+    if (project) {
+      setFormData({
+        heroImage: project.presentation?.heroImage || "/generated/hero_default.webp",
+        conceptText: project.presentation?.conceptText || "",
+        visionAtmosphere: project.presentation?.vision?.atmosphere || "",
+        visionDirection: project.presentation?.vision?.direction || "",
+        visionGoals: project.presentation?.vision?.goals || [],
+        planimetryImage: project.presentation?.planimetryImage || "/generated/planimetry_default.webp",
+        moodboardImages: project.presentation?.moodboardImages || [],
+        inspirations: project.presentation?.inspirations || [],
+        focusAreas: project.presentation?.focusAreas || [],
+        totalEstimate: project.presentation?.proposal?.totalEstimate || "",
+        timeline: project.presentation?.proposal?.timeline || "",
+      });
+    }
+  }, [project]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] text-stone-100">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C5A880]" />
+      </div>
+    );
+  }
 
   if (!project) return <div>Progetto non trovato</div>;
 
@@ -131,34 +158,36 @@ export default function EditPresentationPage({ params }: { params: Promise<{ id:
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
     
-    updateProject(project.id, {
-      presentation: {
-        heroImage: formData.heroImage,
-        conceptText: formData.conceptText,
-        vision: {
-          atmosphere: formData.visionAtmosphere,
-          direction: formData.visionDirection,
-          goals: formData.visionGoals.filter(Boolean)
-        },
-        planimetryImage: formData.planimetryImage,
-        moodboardImages: formData.moodboardImages,
-        inspirations: formData.inspirations,
-        focusAreas: formData.focusAreas,
-        proposal: {
-          totalEstimate: formData.totalEstimate,
-          timeline: formData.timeline
+    try {
+      await updateProject(project.id, {
+        presentation: {
+          heroImage: formData.heroImage,
+          conceptText: formData.conceptText,
+          vision: {
+            atmosphere: formData.visionAtmosphere,
+            direction: formData.visionDirection,
+            goals: formData.visionGoals.filter(Boolean)
+          },
+          planimetryImage: formData.planimetryImage,
+          moodboardImages: formData.moodboardImages,
+          inspirations: formData.inspirations,
+          focusAreas: formData.focusAreas,
+          proposal: {
+            totalEstimate: formData.totalEstimate,
+            timeline: formData.timeline
+          }
         }
-      }
-    });
-
-    setTimeout(() => {
-      setIsSaving(false);
+      });
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
-    }, 600);
+    } catch (e) {
+      alert("Errore durante il salvataggio della presentazione.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Helper per mostrare anteprima immagine o placeholder con supporto upload (cliccandola)

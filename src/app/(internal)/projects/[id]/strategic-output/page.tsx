@@ -11,7 +11,7 @@ import { useRef } from "react";
 
 export default function StrategicOutputPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const { getProject } = useProjects();
+  const { getProject, updateProject, loading } = useProjects();
   const project = getProject(resolvedParams.id);
   const [activeTab, setActiveTab] = useState<'insights' | 'competitors' | 'report'>('insights');
   const [competitors, setCompetitors] = useState<EnrichedCompetitor[]>([]);
@@ -25,15 +25,24 @@ export default function StrategicOutputPage({ params }: { params: Promise<{ id: 
   const [editFormData, setEditFormData] = useState<Partial<EnrichedCompetitor>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [isEditingReport, setIsEditingReport] = useState(false);
-  const { updateProject } = useProjects();
   const [copied, setCopied] = useState(false);
   
   // Custom Report state
-  const [customAtmosphere, setCustomAtmosphere] = useState(project?.customReport?.atmosphereInsight || "");
-  const [customWowPoints, setCustomWowPoints] = useState(project?.customReport?.wowPoints?.join("\n\n") || "");
-  const [customStrategy, setCustomStrategy] = useState(project?.customReport?.competitorStrategy || "");
+  const [customAtmosphere, setCustomAtmosphere] = useState("");
+  const [customWowPoints, setCustomWowPoints] = useState("");
+  const [customStrategy, setCustomStrategy] = useState("");
 
   const pdfTemplateRef = useRef<HTMLDivElement>(null);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] text-stone-100">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C5A880]" />
+      </div>
+    );
+  }
+
+  if (!project) return <div>Progetto non trovato</div>;
 
   const handleStartEdit = (comp: EnrichedCompetitor) => {
     setEditingCompetitorId(comp.id);
@@ -157,29 +166,29 @@ export default function StrategicOutputPage({ params }: { params: Promise<{ id: 
     return strategy;
   };
 
-  // Set default values for custom report if they are empty
+  // Sync state once project is loaded or competitorsFetched updates
   useEffect(() => {
-    if (project && !customAtmosphere && !project.customReport?.atmosphereInsight) {
-      setCustomAtmosphere(generateAtmosphereInsight());
-    }
-    if (project && !customWowPoints && (!project.customReport?.wowPoints || project.customReport.wowPoints.length === 0)) {
-      setCustomWowPoints(generateWowPoints().join("\n\n"));
-    }
-    if (project && !customStrategy && !project.customReport?.competitorStrategy) {
-      setCustomStrategy(generateCompetitorStrategy());
+    if (project) {
+      setCustomAtmosphere(project.customReport?.atmosphereInsight || generateAtmosphereInsight());
+      setCustomWowPoints(project.customReport?.wowPoints?.join("\n\n") || generateWowPoints().join("\n\n"));
+      setCustomStrategy(project.customReport?.competitorStrategy || generateCompetitorStrategy());
     }
   }, [project, competitorsFetched]);
 
-  const handleSaveReport = () => {
+  const handleSaveReport = async () => {
     if (project) {
-      updateProject(project.id, {
-        customReport: {
-          atmosphereInsight: customAtmosphere,
-          wowPoints: customWowPoints.split("\n\n").filter(p => p.trim() !== ""),
-          competitorStrategy: customStrategy,
-        }
-      });
-      setIsEditingReport(false);
+      try {
+        await updateProject(project.id, {
+          customReport: {
+            atmosphereInsight: customAtmosphere,
+            wowPoints: customWowPoints.split("\n\n").filter(p => p.trim() !== ""),
+            competitorStrategy: customStrategy,
+          }
+        });
+        setIsEditingReport(false);
+      } catch (err) {
+        alert("Errore durante il salvataggio del report.");
+      }
     }
   };
 

@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Project {
+  id               String   @id
+  name             String
+  clientName       String
+  venueName        String
+  location         String
+  type             String
+  sizeSqM          Int
+  seatingCapacity  Int
+  status           String
+  budget           String
+  targetAudience   String
+  positioning      String
+  goals            String
+  visualDirection  String
+  materials        String
+  focusElements    String
+  notes            String
+  password         String
+  presentation     Json?
+  customReport     Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

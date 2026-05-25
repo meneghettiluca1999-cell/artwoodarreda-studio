@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProjects } from "@/contexts/ProjectContext";
@@ -36,6 +36,8 @@ export default function NewProjectWizard() {
     notes: ""
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -49,30 +51,37 @@ export default function NewProjectWizard() {
     }));
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (currentStep < steps.length) {
       setCurrentStep(curr => curr + 1);
     } else {
       // Form completion
-      const newId = addProject({
-        name: formData.name || "Nuovo Progetto",
-        clientName: formData.clientName || "Cliente Anonimo",
-        status: "new",
-        type: formData.types.length > 0 ? formData.types.join(", ") : "Non specificato",
-        location: formData.location || "Non specificato",
-        venueName: formData.name || "Nuovo Locale",
-        sizeSqM: formData.sizeSqM || 0,
-        seatingCapacity: formData.seatingCapacity || 0,
-        budget: "Non specificato",
-        targetAudience: formData.target || "Non specificato",
-        positioning: formData.positioning || "Non specificato",
-        goals: formData.businessGoals || "Non specificato",
-        visualDirection: formData.visualDirection || "Non specificato",
-        materials: formData.materials || "Non specificato",
-        focusElements: formData.focusElements || "Non specificato",
-        notes: formData.notes || ""
-      });
-      router.push(`/projects/${newId}/strategic-output`);
+      try {
+        setIsSubmitting(true);
+        const newId = await addProject({
+          name: formData.name || "Nuovo Progetto",
+          clientName: formData.clientName || "Cliente Anonimo",
+          status: "new",
+          type: formData.types.length > 0 ? formData.types.join(", ") : "Non specificato",
+          location: formData.location || "Non specificato",
+          venueName: formData.name || "Nuovo Locale",
+          sizeSqM: formData.sizeSqM || 0,
+          seatingCapacity: formData.seatingCapacity || 0,
+          budget: "Non specificato",
+          targetAudience: formData.target || "Non specificato",
+          positioning: formData.positioning || "Non specificato",
+          goals: formData.businessGoals || "Non specificato",
+          visualDirection: formData.visualDirection || "Non specificato",
+          materials: formData.materials || "Non specificato",
+          focusElements: formData.focusElements || "Non specificato",
+          notes: formData.notes || ""
+        });
+        router.push(`/projects/${newId}/strategic-output`);
+      } catch (err) {
+        console.error(err);
+        alert("Errore durante la creazione del progetto.");
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -288,10 +297,20 @@ export default function NewProjectWizard() {
           
           <button
             onClick={nextStep}
-            className="inline-flex items-center px-6 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/90 transition-colors shadow-sm"
+            disabled={isSubmitting}
+            className="inline-flex items-center px-6 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {currentStep === steps.length ? 'Genera Strategia' : 'Avanti'}
-            {currentStep !== steps.length && <ArrowRight className="ml-2 h-4 w-4" />}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generazione...
+              </>
+            ) : (
+              <>
+                {currentStep === steps.length ? 'Genera Strategia' : 'Avanti'}
+                {currentStep !== steps.length && <ArrowRight className="ml-2 h-4 w-4" />}
+              </>
+            )}
           </button>
         </div>
       </div>
